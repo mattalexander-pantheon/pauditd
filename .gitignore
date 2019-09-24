@@ -1,6 +1,7 @@
 dist/
 pauditd
-pauditd.yaml
+/pauditd.yaml
+devops/k8s/secrets
 !examples/**
 *.pprof
 *.test

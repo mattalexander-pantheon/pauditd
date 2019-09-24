@@ -65,15 +65,18 @@ func (a *AuditMarshaller) Consume(nlMsg *syscall.NetlinkMessage) {
 	if nlMsg.Header.Type < a.eventMin || nlMsg.Header.Type > a.eventMax {
 		// Drop all audit messages that aren't things we care about or end a multi packet event
 		a.flushOld()
+		slog.Info.Printf("We don't care about this (%d)", nlMsg.Header.Type)
 		return
 	} else if nlMsg.Header.Type == EVENT_EOE {
 		// This is end of event msg, flush the msg with that sequence and discard this one
+		slog.Info.Printf("Completing message (%d)", nlMsg.Header.Type)
 		a.completeMessage(aMsg.Seq)
 		return
 	}
 
 	if val, ok := a.msgs[aMsg.Seq]; ok {
 		// Use the original AuditMessageGroup if we have one
+		slog.Info.Printf("Adding message (%d)", nlMsg.Header.Type)
 		val.AddMessage(aMsg)
 	} else {
 		// Create a new AuditMessageGroup
@@ -86,12 +89,18 @@ func (a *AuditMarshaller) Consume(nlMsg *syscall.NetlinkMessage) {
 // Outputs any messages that are old enough
 // This is because there is no indication of multi message events coming from kaudit
 func (a *AuditMarshaller) flushOld() {
+	slog.Info.Printf("flushOld")
 	now := time.Now()
 	for seq, msg := range a.msgs {
+		slog.Info.Printf("flushOld: Complete message?")
 		if msg.CompleteAfter.Before(now) || now.Equal(msg.CompleteAfter) {
+			slog.Info.Printf("flushOld: ... yes")
 			a.completeMessage(seq)
+		} else {
+			slog.Info.Printf("flushOld: ... no")
 		}
 	}
+	slog.Info.Printf("flushOld: no more messages")
 }
 
 // Write a complete message group to the configured output in json format
@@ -105,6 +114,7 @@ func (a *AuditMarshaller) completeMessage(seq int) {
 	}
 
 	if a.dropMessage(msg) {
+		slog.Info.Printf("Dropping message")
 		metric.GetClient().Increment("messages.filtered")
 		delete(a.msgs, seq)
 		return
@@ -140,11 +150,15 @@ func (a *AuditMarshaller) filterSyscallMessageType(msg *parser.AuditMessageGroup
 		if fg, hasFilter := syscallFilters[msg.Type]; hasFilter {
 			for _, filter := range fg {
 				if filter.Regex.MatchString(msg.Data) {
+					slog.Info.Printf("Filter on syscall message?: %s", filter.Action)
+					slog.Info.Printf("Regex: %s", filter.Regex.String())
 					return filter.Action
 				}
 			}
 		}
 	}
+
+	slog.Info.Printf("Keeping syscall message because it passed filters")
 
 	return Keep
 }
@@ -154,6 +168,7 @@ func (a *AuditMarshaller) filterRuleKey(msgGroup *parser.AuditMessageGroup) Filt
 	ruleKeyFilters, hasRuleKey := a.filters[msgGroup.RuleKey][0]
 
 	if !hasRuleKey {
+		slog.Info.Printf("Keeping message because it has no rule key")
 		// no filter found for rule key move on (fast path)
 		return Keep
 	}
@@ -167,9 +182,13 @@ func (a *AuditMarshaller) filterRuleKey(msgGroup *parser.AuditMessageGroup) Filt
 	// to the next rule
 	for _, filter := range ruleKeyFilters {
 		if filter.Regex.MatchString(fullMessage) {
+			slog.Info.Printf("Filter on rule key message?: %s", filter.Action)
+			slog.Info.Printf("Regex: %s", filter.Regex.String())
 			return filter.Action
 		}
 	}
+
+	slog.Info.Printf("Keeping rule key message because it passed filters")
 
 	// default
 	return Keep

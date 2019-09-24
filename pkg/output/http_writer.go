@@ -90,7 +90,7 @@ func (w *HTTPWriter) Process(ctx context.Context) {
 			traceID := uuid.NewV1()
 
 			if w.debug {
-				slog.Info.Printf("{ trace_id: \"%s\", msg: %s }", traceID, strings.TrimSuffix(string(transport.message), "\n"))
+				slog.Info.Printf("{ \"trace_id\": \"%s\", \"msg\": %s }", traceID, strings.TrimSuffix(string(transport.message), "\n"))
 			}
 
 			body, err := w.ResponseBodyTransformer.Transform(traceID, transport.message)
@@ -98,7 +98,7 @@ func (w *HTTPWriter) Process(ctx context.Context) {
 				continue
 			}
 			if w.debug {
-				slog.Info.Printf(string(body))
+				slog.Info.Printf("Transformed message: %s", string(body))
 			}
 			payloadReader := bytes.NewReader(body)
 
@@ -117,6 +117,8 @@ func (w *HTTPWriter) Process(ctx context.Context) {
 				slog.Error.Printf("HTTPWriter.Process could not send request: %s", err.Error())
 				continue
 			}
+
+			slog.Info.Printf("Requested %s %s, got %d", http.MethodPost, w.url, resp.StatusCode)
 
 			metric.GetClient().Increment(fmt.Sprintf("http_code.%d", resp.StatusCode))
 			resp.Body.Close()

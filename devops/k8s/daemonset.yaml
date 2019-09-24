@@ -1,0 +1,73 @@
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: cos-pauditd
+  labels:
+    app: cos-pauditd
+    cos-system-service: "true"
+spec:
+  selector:
+    matchLabels:
+      app: cos-pauditd
+      cos-system-service: "true"
+  template:
+    metadata:
+      labels:
+        app: cos-pauditd
+        cos-system-service: "true"
+    spec:
+      serviceAccountName: cos-pauditd
+      nodeSelector:
+        alpha.pantheon.io/cos: "true"
+        alpha.pantheon.io/cos-namespace: __KUBE_NAMESPACE__
+      tolerations:
+        - key: node.pantheon.io/cos
+          value: "true"
+      hostPID: true
+      containers:
+        - name: cos-pauditd
+          image: __IMAGE__
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+          env:
+            - name: HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+          - name: config
+            mountPath: /configmap
+            readOnly: true
+          - name: containers
+            mountPath: /mnt/disks/data/containers
+            readOnly: true
+          - name: usermgmt
+            mountPath: /usermgmt/etc
+            readOnly: true
+          - name: etc-pantheon
+            mountPath: /etc/pantheon
+            readOnly: true
+          - name: ca-cert
+            mountPath: /ca-certs
+            readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: pauditd-config
+      - name: containers
+        hostPath:
+          path: /mnt/disks/data/containers
+          type: Directory
+      - name: usermgmt
+        hostPath:
+          path: /mnt/disks/data/usermgmt
+          type: Directory
+      - name: etc-pantheon
+        hostPath:
+          path: /mnt/disks/data/etc/pantheon
+          type: Directory
+      - name: ca-cert
+        secret:
+          secretName: pantheon-ca-cert

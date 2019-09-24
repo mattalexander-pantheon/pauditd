@@ -1,0 +1,92 @@
+# Configure socket buffers, leave unset to use the system defaults
+# Values will be doubled by the kernel
+# It is recommended you do not set any of these values unless you really need to
+socket_buffer:
+  # Default is net.core.rmem_default (/proc/sys/net/core/rmem_default)
+  # Maximum max is net.core.rmem_max (/proc/sys/net/core/rmem_max)
+  # Pantheon appserver -> default: 212992, max: 425984
+  receive: 425984
+
+events:
+  # Minimum event type to capture, default 1300
+  min: 1300
+  # Maximum event type to capture, default 1399
+  max: 1399
+
+# Configure message sequence tracking
+message_tracking:
+  # Track messages and identify if we missed any, default true
+  enabled: true
+
+  # Log out of orderness, these messages typically signify an overloading system, default false
+  log_out_of_order: false
+
+  # Maximum out of orderness before a missed sequence is presumed dropped, default 500
+  max_out_of_order: 500
+
+# Configure where to output audit events, only one can be enabled at a time
+output:
+  http:
+    enabled: true
+    attempts: 2
+    url: https://notification-service/message
+    worker_count: 60
+    buffer_size: 100000
+    trace_header_name: X-PANTHEON-TRACE-ID
+    response_body_transformer: notification-service
+    debug: true
+    ssl:
+      enabled: true
+      client_cert: /etc/pantheon/endpoint.crt
+      client_key: /etc/pantheon/endpoint.key
+      ca_cert: /ca-certs/ca.crt
+    notification_service_transformer:
+      extra_attributes:
+        host_ip_address: __PUBLIC_IP__
+
+metrics:
+  enabled: true
+  address: metrics:8126
+  sample_rate: 0.25
+
+parser:
+  enable_uid_caching: true
+  password_file_path: /etc/passwd
+
+# Rules can be configured here if they want to use filters
+# If not then a file can be droped in rules.d and the augenrules
+# will pick it up and add it to the system
+rules:
+  - -D
+  - -a exclude,always -F msgtype=1325 # iptables
+  - -a exclude,always -F msgtype=1305 # triggered every 5 seconds as keepalive
+  - -a always,exit -F dir=/mnt/disks/data/containers -F perm=w -F success=1 -k binding-file-ops
+
+filters:
+# comment this out to test without root filter on, this constrains the messages to euid in the binding user range
+  - key: binding-file-ops
+    action: drop
+    regex: (.git|chef-solo|wp-content/uploads|sites/default/files)
+  - key: binding-file-ops
+    action: drop
+    regex: temp-write-test-[0-9]{10}
+  - key: binding-file-ops
+    action: keep
+    # 2F636F64652F is the hexadecimal equiv of /code/ in ascii (see BUGS-2225 and BUGS-2686)
+    # The data will look like one of the following:
+    #   name=\"/code/test...
+    #   name=2F636F64652F666F6F2062...
+    regex: name=(\"/code/|2F636F64652F).*
+  - key: binding-file-ops
+    action: keep
+    regex: cwd=\"((/code)?|(.*commit_push_code)).*\bname=(\")(/)?code/.*
+  - key: binding-file-ops
+    action: keep
+    regex: name=\"/mnt/disks/data/containers/[a-fA-F0-9]{32}/code/tmp[a-zA-Z0-9]{6}\"
+  - key: binding-file-ops
+    action: keep
+    regex: cwd=\"/code.*\bname=((\")(\./|[^/])|[A-F0-9]+).*
+    # This is the default rule should always go last
+  - key: binding-file-ops
+    action: keep
+    regex: .*

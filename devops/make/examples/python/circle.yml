@@ -1,0 +1,25 @@
+machine:
+  python:
+    version: 3.5.2
+  environment:
+    CLOUDSDK_PYTHON: /usr/bin/python2.7 # https://code.google.com/p/google-cloud-sdk/issues/detail?id=355
+    PATH: /home/ubuntu/google-cloud-sdk/bin:$PATH
+  services:
+    - docker
+
+dependencies:
+  override:
+    - make deps-circle
+    - make deps
+
+test:
+  override:
+    - make test-circle
+
+deployment:
+  release:
+    branch:
+      - master
+    commands:
+      - make deploy check-deployment-status KUBE_NAMESPACE=template-sandbox
+      - make update-budget deploy check-deployment-status

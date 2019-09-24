@@ -1,0 +1,36 @@
+# This circle.yml builds and tests the utilities in common-makefiles
+# and should not be used as a template for your project. See the `examples`
+# directory for sample circle.yml files.
+#
+---
+version: 2
+jobs:
+  test-build:
+    docker:
+      - image: quay.io/getpantheon/go-build:latest
+        auth:
+          username: $QUAY_USER
+          password: $QUAY_PASSWD
+    steps:
+      - setup_remote_docker
+      - checkout
+      - run: make test-deps-build
+      - run: make test-common-build
+
+  test-deploy:
+    docker:
+      - image: quay.io/getpantheon/deploy-toolbox:latest
+        auth:
+          username: $QUAY_USER
+          password: $QUAY_PASSWD
+    steps:
+      - checkout
+      - run: make test-deps-deploy
+      - run: make test-common-deploy
+
+workflows:
+  version: 2
+  primary:
+    jobs:
+      - test-build
+      - test-deploy

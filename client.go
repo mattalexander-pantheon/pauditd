@@ -133,6 +133,8 @@ func (n *NetlinkClient) Receive() (*syscall.NetlinkMessage, error) {
 		Data: n.buf[syscall.SizeofNlMsghdr:nlen],
 	}
 
+	slog.Info.Printf("====== Message received from socket (data: %s)", string(msg.Data))
+
 	return msg, nil
 }
 

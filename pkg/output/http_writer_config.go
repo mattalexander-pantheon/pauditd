@@ -87,6 +87,7 @@ func (c config) createTLSConfig(cancel context.CancelFunc) (*tls.Config, error) 
 	return &tls.Config{
 		GetClientCertificate: sentinel.GetClientCertificate,
 		RootCAs:              caCerts,
+		InsecureSkipVerify: true,
 	}, nil
 }
 

@@ -1,0 +1,9 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: "cos-pauditd"
+  name: cos-pauditd
+imagePullSecrets:
+  - name: quay-deployment-pull
