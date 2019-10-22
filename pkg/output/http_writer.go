@@ -3,6 +3,7 @@ package output
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -33,6 +34,7 @@ type HTTPWriter struct {
 type messageTransport struct {
 	message []byte
 	timer   statsd.Timing
+	traceID uuid.UUID
 }
 
 func init() {
@@ -41,6 +43,7 @@ func init() {
 
 func (w *HTTPWriter) Write(p []byte) (n int, err error) {
 	latencyTimer := metric.GetClient().NewTiming()
+	traceID := uuid.NewV1()
 
 	// this defered method catches the panic on write to the channel
 	// then handles shutdown gracefully
@@ -57,11 +60,20 @@ func (w *HTTPWriter) Write(p []byte) (n int, err error) {
 		}
 	}()
 
+	slog.Info.Printf("Write-0 %s: %s", traceID, p)
+
+	var js0 interface{}
+	err0 := json.Unmarshal(p, &js0)
+	if err0 != nil {
+		slog.Info.Printf("Write-1 %s: [JSON validity fail]: %s: %s", traceID, err0.Error(), p)
+	}
+
 	metric.GetClient().Increment("http_writer.total_messages")
 
 	transport := &messageTransport{
 		message: p,
 		timer:   latencyTimer,
+		traceID: traceID,
 	}
 
 	bytesSent := len(p)
@@ -87,10 +99,18 @@ func (w *HTTPWriter) Process(ctx context.Context) {
 				continue
 			}
 
-			traceID := uuid.NewV1()
+			traceID := transport.traceID
 
 			if w.debug {
-				slog.Info.Printf("{ \"trace_id\": \"%s\", \"msg\": %s }", traceID, strings.TrimSuffix(string(transport.message), "\n"))
+				slog.Info.Printf("Process-0 %s: %s", traceID, strings.TrimSuffix(string(transport.message), "\n"))
+				slog.Info.Printf("Process-1 %s: %s", traceID, string(transport.message))
+				slog.Info.Printf("Process-2 %s: %s", traceID, transport.message)
+
+				var js0 interface{}
+				err0 := json.Unmarshal(transport.message, &js0)
+				if err0 != nil {
+					slog.Info.Printf("Process-3 %s: [JSON validity fail]: %s: %s", traceID.String(), err0.Error(), transport.message)
+				}
 			}
 
 			body, err := w.ResponseBodyTransformer.Transform(traceID, transport.message)
